@@ -67,6 +67,10 @@ public class ServiceTest extends TestCase {
                 throw stopException;
         }
 
+        public void refresh() {
+        // do nothing
+        }
+
     }
 
 }

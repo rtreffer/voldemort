@@ -114,6 +114,10 @@ public class VoldemortConfig implements Serializable {
 
     private final long pusherPollMs;
 
+    private int adminCoreThreads;
+    private int adminMaxThreads;
+    private int adminStreamBufferSize;
+
     public VoldemortConfig(int nodeId, String voldemortHome) {
         this(new Props().with("node.id", nodeId).with("voldemort.home", voldemortHome));
     }
@@ -163,6 +167,11 @@ public class VoldemortConfig implements Serializable {
 
         this.maxThreads = props.getInt("max.threads", 100);
         this.coreThreads = props.getInt("core.threads", Math.max(1, maxThreads / 2));
+
+        this.adminMaxThreads = props.getInt("admin.max.threads", 100);
+        this.adminCoreThreads = props.getInt("admin.core.threads", Math.max(1, maxThreads / 2));
+        this.adminStreamBufferSize = (int) props.getBytes("admin.streams.buffer.size",
+                                                          10 * 1000 * 1000);
 
         this.socketTimeoutMs = props.getInt("socket.timeout.ms", 4000);
         this.socketBufferSize = (int) props.getBytes("socket.buffer.size", 32 * 1024);
@@ -401,6 +410,28 @@ public class VoldemortConfig implements Serializable {
 
     public void setMaxThreads(int maxThreads) {
         this.maxThreads = maxThreads;
+    }
+
+    /**
+     * Admin Threads count setting default is core=1 , max = 2
+     * 
+     * @return
+     */
+
+    public int getAdminCoreThreads() {
+        return adminCoreThreads;
+    }
+
+    public void setAdminCoreThreads(int coreThreads) {
+        this.adminCoreThreads = coreThreads;
+    }
+
+    public int getAdminMaxThreads() {
+        return adminMaxThreads;
+    }
+
+    public void setAdminMaxThreads(int maxThreads) {
+        this.adminMaxThreads = maxThreads;
     }
 
     public boolean isHttpServerEnabled() {
@@ -665,6 +696,14 @@ public class VoldemortConfig implements Serializable {
 
     public void setSocketBufferSize(int socketBufferSize) {
         this.socketBufferSize = socketBufferSize;
+    }
+
+    public int getAdminSocketBufferSize() {
+        return adminStreamBufferSize;
+    }
+
+    public void setAdminSocketBufferSize(int socketBufferSize) {
+        this.adminStreamBufferSize = socketBufferSize;
     }
 
     public List<String> getStorageConfigurations() {

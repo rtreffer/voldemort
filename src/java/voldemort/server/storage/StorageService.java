@@ -304,4 +304,9 @@ public class StorageService extends AbstractService {
         return this.storeRepository;
     }
 
+    public void refresh() {
+        // should close and open all stores.
+        stopInner();
+        startInner();
+    }
 }

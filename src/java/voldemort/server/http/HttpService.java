@@ -131,4 +131,8 @@ public class HttpService extends AbstractService {
         return requestHandler;
     }
 
+    public void refresh() {
+    // do nothing
+    }
+
 }

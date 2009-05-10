@@ -90,4 +90,8 @@ public class SchedulerService extends AbstractService {
         return Math.max(0, runDate.getTime() - time.getMilliseconds());
     }
 
+    public void refresh() {
+    // do nothing
+    }
+
 }

@@ -18,7 +18,6 @@ package voldemort;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.StringReader;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,8 +50,7 @@ import voldemort.store.socket.SocketPool;
 import voldemort.store.socket.SocketStore;
 import voldemort.utils.ByteArray;
 import voldemort.utils.Props;
-import voldemort.xml.ClusterMapper;
-import voldemort.xml.StoreDefinitionsMapper;
+import voldemort.versioning.Versioned;
 
 import com.google.common.collect.ImmutableList;
 
@@ -69,10 +67,18 @@ public class ServerTestUtils {
         Store<ByteArray, byte[]> store = new InMemoryStorageEngine<ByteArray, byte[]>(storeName);
         repository.addLocalStore(store);
         repository.addRoutedStore(store);
-        MetadataStore metadata = new MetadataStore(new ClusterMapper().readCluster(new StringReader(clusterXml)),
-                                                   new StoreDefinitionsMapper().readStoreList(new StringReader(storesXml)));
+
+        MetadataStore metadata = getMetadataStore(clusterXml, storesXml);
         repository.addLocalStore(metadata);
         return repository;
+    }
+
+    public static MetadataStore getMetadataStore(String clusterXml, String storesXml) {
+        Store<String, String> innerMetaStore = new InMemoryStorageEngine<String, String>(MetadataStore.METADATA_STORE_NAME);
+        innerMetaStore.put(MetadataStore.CLUSTER_KEY, Versioned.value(clusterXml));
+        innerMetaStore.put(MetadataStore.STORES_KEY, Versioned.value(storesXml));
+        MetadataStore metadata = new MetadataStore(innerMetaStore);
+        return metadata;
     }
 
     public static SocketServer getSocketServer(String clusterXml,
@@ -162,16 +168,21 @@ public class ServerTestUtils {
     }
 
     public static Cluster getLocalCluster(int numberOfNodes) {
-        return getLocalCluster(numberOfNodes, findFreePorts(2 * numberOfNodes));
+        return getLocalCluster(numberOfNodes, findFreePorts(3 * numberOfNodes));
     }
 
     public static Cluster getLocalCluster(int numberOfNodes, int[] ports) {
-        if(2 * numberOfNodes != ports.length)
-            throw new IllegalArgumentException(2 * numberOfNodes + " ports required but only "
+        if(3 * numberOfNodes != ports.length)
+            throw new IllegalArgumentException(3 * numberOfNodes + " ports required but only "
                                                + ports.length + " given.");
         List<Node> nodes = new ArrayList<Node>();
         for(int i = 0; i < numberOfNodes; i++)
-            nodes.add(new Node(i, "localhost", ports[2 * i], ports[2 * i + 1], ImmutableList.of(i)));
+            nodes.add(new Node(i,
+                               "localhost",
+                               ports[3 * i],
+                               ports[3 * i + 1],
+                               ports[3 * i + 2],
+                               ImmutableList.of(i)));
         return new Cluster("test-cluster", nodes);
     }
 

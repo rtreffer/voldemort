@@ -43,4 +43,11 @@ public interface VoldemortService {
      * @return true iff the service is started
      */
     public boolean isStarted();
+
+    /**
+     * Services need to be refreshed if any metadata is changing
+     * <p>
+     * TODO: Make it event driven using zookeeper or something
+     */
+    public abstract void refresh();
 }

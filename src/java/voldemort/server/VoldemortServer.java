@@ -33,12 +33,18 @@ import voldemort.server.jmx.JmxService;
 import voldemort.server.protocol.RequestHandler;
 import voldemort.server.protocol.RequestHandlerFactory;
 import voldemort.server.scheduler.SchedulerService;
+import voldemort.server.socket.AdminServiceRequestHandler;
 import voldemort.server.socket.SocketService;
 import voldemort.server.storage.StorageService;
 import voldemort.store.metadata.MetadataStore;
+import voldemort.utils.ByteArray;
+import voldemort.utils.ByteUtils;
 import voldemort.utils.Props;
 import voldemort.utils.SystemTime;
 import voldemort.utils.Utils;
+import voldemort.versioning.VectorClock;
+import voldemort.versioning.Versioned;
+import voldemort.xml.ClusterMapper;
 
 import com.google.common.collect.ImmutableList;
 
@@ -60,6 +66,13 @@ public class VoldemortServer extends AbstractService {
     private final List<VoldemortService> services;
     private final StoreRepository storeRepository;
     private final VoldemortConfig voldemortConfig;
+    private final SocketService adminService;
+
+    public static enum SERVER_STATE {
+        NORMAL_STATE,
+        REBALANCING_STEALER_STATE,
+        REBALANCING_DONOR_STATE
+    }
 
     public VoldemortServer(VoldemortConfig config) {
         super(ServiceType.VOLDEMORT);
@@ -68,6 +81,7 @@ public class VoldemortServer extends AbstractService {
         this.metadataStore = MetadataStore.readFromDirectory(new File(voldemortConfig.getMetadataDirectory()));
         this.identityNode = metadataStore.getCluster().getNodeById(voldemortConfig.getNodeId());
         this.services = createServices();
+        this.adminService = createAdminService(metadataStore, services);
     }
 
     public VoldemortServer(Props props, MetadataStore metadataStore) {
@@ -77,6 +91,44 @@ public class VoldemortServer extends AbstractService {
         this.storeRepository = new StoreRepository();
         this.services = createServices();
         this.metadataStore = metadataStore;
+        this.adminService = createAdminService(metadataStore, services);
+    }
+
+    public VoldemortServer(VoldemortConfig config, Cluster cluster) {
+        super(ServiceType.VOLDEMORT);
+        this.voldemortConfig = config;
+        this.identityNode = cluster.getNodeById(voldemortConfig.getNodeId());
+        this.storeRepository = new StoreRepository();
+        this.metadataStore = MetadataStore.readFromDirectory(new File(voldemortConfig.getMetadataDirectory()));
+
+        // update cluster details in metaDataStore
+        metadataStore.put(new ByteArray(ByteUtils.getBytes(MetadataStore.CLUSTER_KEY, "UTF-8")),
+                          new Versioned<byte[]>(ByteUtils.getBytes(new ClusterMapper().writeCluster(cluster),
+                                                                   "UTF-8"),
+                                                new VectorClock()));
+        this.services = createServices();
+        this.adminService = createAdminService(metadataStore, services);
+    }
+
+    private SocketService createAdminService(MetadataStore metaStore,
+                                             List<VoldemortService> serviceList) {
+        // check if Admin port is valid or not
+        try {
+            identityNode.getAdminPort();
+        } catch(VoldemortException e) {
+            logger.warn("Admin Port not set for server Id:" + identityNode.getId()
+                        + " starting w/o Admin Service (REBALANCING WILL NOT WORK)");
+        }
+
+        RequestHandler requestHandler = new AdminServiceRequestHandler(storeRepository,
+                                                                       metaStore,
+                                                                       serviceList,
+                                                                       identityNode.getId());
+        return new SocketService(requestHandler,
+                                 identityNode.getAdminPort(),
+                                 voldemortConfig.getAdminCoreThreads(),
+                                 voldemortConfig.getAdminMaxThreads(),
+                                 voldemortConfig.getAdminSocketBufferSize());
     }
 
     private List<VoldemortService> createServices() {
@@ -116,6 +168,9 @@ public class VoldemortServer extends AbstractService {
             service.start();
         long end = System.currentTimeMillis();
 
+        logger.info("Starting Admin Service");
+        adminService.start();
+
         logger.info("Startup completed in " + (end - start) + " ms.");
     }
 
@@ -128,6 +183,9 @@ public class VoldemortServer extends AbstractService {
     @Override
     protected void stopInner() throws VoldemortException {
         List<VoldemortException> exceptions = new ArrayList<VoldemortException>();
+
+        adminService.stop();
+
         logger.info("Stopping services:");
         /* Stop in reverse order */
         for(VoldemortService service: Utils.reversed(services)) {
@@ -139,6 +197,15 @@ public class VoldemortServer extends AbstractService {
             }
         }
         logger.info("All services stopped.");
+
+        logger.info("Closing Metadata Store");
+        try {
+            if(metadataStore != null)
+                metadataStore.close();
+        } catch(VoldemortException e) {
+            logger.error("Error while closing metadata store:", e);
+        }
+        logger.info("MetadataStore closed.");
 
         if(exceptions.size() > 0)
             throw exceptions.get(0);
@@ -185,6 +252,10 @@ public class VoldemortServer extends AbstractService {
         return services;
     }
 
+    public VoldemortService getAdminService() {
+        return adminService;
+    }
+
     public VoldemortService getService(ServiceType type) {
         for(VoldemortService service: services)
             if(service.getType().equals(type))
@@ -200,4 +271,9 @@ public class VoldemortServer extends AbstractService {
         return this.storeRepository;
     }
 
+    public MetadataStore getMetaDataStore() {
+        return metadataStore;
+    }
+
+    public void refresh() {}
 }

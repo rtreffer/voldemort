@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 
+import voldemort.VoldemortException;
 import voldemort.annotations.concurrency.Threadsafe;
 import voldemort.utils.Utils;
 
@@ -42,22 +43,30 @@ public class Node implements Serializable {
     private final int httpPort;
     private final int socketPort;
     private final List<Integer> partitions;
-    private final NodeStatus status;
+    private final int adminSocketPort;
+    private NodeStatus status;
 
-    public Node(int id, String host, int httpPort, int socketPort, List<Integer> partitions) {
-        this(id, host, httpPort, socketPort, partitions, new NodeStatus());
+    public Node(int id,
+                String host,
+                int httpPort,
+                int socketPort,
+                int adminPort,
+                List<Integer> partitions) {
+        this(id, host, httpPort, socketPort, adminPort, partitions, new NodeStatus());
     }
 
     public Node(int id,
                 String host,
                 int httpPort,
                 int socketPort,
+                int adminSocketPort,
                 List<Integer> partitions,
                 NodeStatus status) {
         this.id = id;
         this.host = Utils.notNull(host);
         this.httpPort = httpPort;
         this.socketPort = socketPort;
+        this.adminSocketPort = adminSocketPort;
         this.status = status;
         this.partitions = ImmutableList.copyOf(partitions);
     }
@@ -72,6 +81,13 @@ public class Node implements Serializable {
 
     public int getSocketPort() {
         return socketPort;
+    }
+
+    public int getAdminPort() {
+        if(adminSocketPort == -1) {
+            throw new VoldemortException("Attemp to use default Admin Port (-1)");
+        }
+        return adminSocketPort;
     }
 
     public int getId() {

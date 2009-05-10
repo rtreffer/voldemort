@@ -105,4 +105,8 @@ public class JmxService extends AbstractService {
         }
     }
 
+    public void refresh() {
+    // do nothing
+    }
+
 }

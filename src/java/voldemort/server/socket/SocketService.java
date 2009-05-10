@@ -62,4 +62,8 @@ public class SocketService extends AbstractService implements VoldemortService {
         return server.getPort();
     }
 
+    public void refresh() {
+        server.refresh();
+    }
+
 }

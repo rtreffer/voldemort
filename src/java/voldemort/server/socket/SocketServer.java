@@ -198,4 +198,8 @@ public class SocketServer extends Thread {
         return baseName + random.nextInt(1000000);
     }
 
+    public void refresh() {
+
+    }
+
 }
