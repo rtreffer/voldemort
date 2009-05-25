@@ -184,6 +184,21 @@ public class TestUtils {
     }
 
     /**
+     * Return an array of length count containing random doubbles in the range
+     * (0, 1) generated off the test rng.
+     * 
+     * @param count The number of doubles to generate
+     * @return The array of doubles
+     */
+    public static double[] randomDouble(int count) {
+        double[] vals = new double[count];
+        for(int i = 0; i < count; i++) {
+            vals[i] = SEEDED_RANDOM.nextDouble();
+        }
+        return vals;
+    }
+
+    /**
      * Weirdly java doesn't seem to have Arrays.shuffle(), this terrible hack
      * does that.
      * 
