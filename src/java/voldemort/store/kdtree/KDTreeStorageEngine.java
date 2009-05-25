@@ -1,6 +1,7 @@
 package voldemort.store.kdtree;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +10,7 @@ import voldemort.VoldemortException;
 import voldemort.store.NoSuchCapabilityException;
 import voldemort.store.StorageEngine;
 import voldemort.store.StoreCapabilityType;
+import voldemort.store.StoreUtils;
 import voldemort.utils.ByteArray;
 import voldemort.utils.ClosableIterator;
 import voldemort.utils.Pair;
@@ -62,7 +64,7 @@ public class KDTreeStorageEngine implements StorageEngine<ByteArray, byte[]> {
 
     @Override
     public ClosableIterator<Pair<ByteArray, Versioned<byte[]>>> entries() {
-        return null;
+        return new KDTreeIterator(root);
     }
 
     /**
@@ -75,6 +77,7 @@ public class KDTreeStorageEngine implements StorageEngine<ByteArray, byte[]> {
 
     @Override
     public boolean delete(ByteArray key, Version version) throws VoldemortException {
+        StoreUtils.assertValidKey(key);
         KDNode<List<Versioned<byte[]>>> result = root.getNode(KDUtil.getDimensionsForKey(key.get()));
         if(result == null) {
             return false;
@@ -118,6 +121,7 @@ public class KDTreeStorageEngine implements StorageEngine<ByteArray, byte[]> {
      */
     @Override
     public List<Versioned<byte[]>> get(ByteArray key) throws VoldemortException {
+        StoreUtils.assertValidKey(key);
         KDNode<List<Versioned<byte[]>>> result = root.getNode(KDUtil.getDimensionsForKey(key.get()));
         if(result == null) {
             // NOT FOUND
@@ -135,7 +139,15 @@ public class KDTreeStorageEngine implements StorageEngine<ByteArray, byte[]> {
     @Override
     public Map<ByteArray, List<Versioned<byte[]>>> getAll(Iterable<ByteArray> keys)
             throws VoldemortException {
-        return null;
+        StoreUtils.assertValidKeys(keys);
+        Map<ByteArray, List<Versioned<byte[]>>> map = new HashMap<ByteArray, List<Versioned<byte[]>>>();
+        for(ByteArray key: keys) {
+            List<Versioned<byte[]>> value = get(key);
+            if(value != null && value.size() > 0) {
+                map.put(key, value);
+            }
+        }
+        return map;
     }
 
     @Override
@@ -158,6 +170,7 @@ public class KDTreeStorageEngine implements StorageEngine<ByteArray, byte[]> {
      */
     @Override
     public void put(ByteArray key, Versioned<byte[]> value) throws VoldemortException {
+        StoreUtils.assertValidKey(key);
         final double dim[] = KDUtil.getDimensionsForKey(key.get());
         KDNode<List<Versioned<byte[]>>> result = root.getNode(dim);
         if(result == null) {

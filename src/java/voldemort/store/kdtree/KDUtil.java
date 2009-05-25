@@ -20,10 +20,16 @@ public class KDUtil {
         return dim;
     }
 
+    /**
+     * Encode a double array key as an byte array.
+     * 
+     * @param key The key to encode.
+     * @return The byte array of the key.
+     */
     public final static byte[] getBytesForKey(final double[] key) {
         byte bytes[] = new byte[key.length * 8];
         for(int i = 0; i < key.length; i++) {
-            long l = Double.doubleToRawLongBits(i);
+            long l = Double.doubleToRawLongBits(key[i]);
             bytes[i * 8] = (byte) (l >>> 56);
             bytes[i * 8 + 1] = (byte) (l >>> 48);
             bytes[i * 8 + 2] = (byte) (l >>> 40);
