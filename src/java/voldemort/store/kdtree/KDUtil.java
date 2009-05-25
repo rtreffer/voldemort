@@ -1,6 +1,5 @@
 package voldemort.store.kdtree;
 
-
 public class KDUtil {
 
     /**
@@ -21,4 +20,19 @@ public class KDUtil {
         return dim;
     }
 
+    public final static byte[] getBytesForKey(final double[] key) {
+        byte bytes[] = new byte[key.length * 8];
+        for(int i = 0; i < key.length; i++) {
+            long l = Double.doubleToRawLongBits(i);
+            bytes[i * 8] = (byte) (l >>> 56);
+            bytes[i * 8 + 1] = (byte) (l >>> 48);
+            bytes[i * 8 + 2] = (byte) (l >>> 40);
+            bytes[i * 8 + 3] = (byte) (l >>> 32);
+            bytes[i * 8 + 4] = (byte) (l >>> 24);
+            bytes[i * 8 + 5] = (byte) (l >>> 16);
+            bytes[i * 8 + 6] = (byte) (l >>> 8);
+            bytes[i * 8 + 7] = (byte) (l);
+        }
+        return bytes;
+    }
 }
