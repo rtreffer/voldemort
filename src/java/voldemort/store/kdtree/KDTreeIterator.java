@@ -10,11 +10,11 @@ import voldemort.versioning.Versioned;
 public class KDTreeIterator implements ClosableIterator<Pair<ByteArray, Versioned<byte[]>>> {
 
     private KDNode<List<Versioned<byte[]>>> position;
-    private KDNode<List<Versioned<byte[]>>> lposition;
-    private Pair<ByteArray, Versioned<byte[]>> lvalue;
     private Pair<ByteArray, Versioned<byte[]>> value;
     private List<Versioned<byte[]>> data;
-    private List<Versioned<byte[]>> ldata;
+    private KDNode<List<Versioned<byte[]>>> lastPosition;
+    private Pair<ByteArray, Versioned<byte[]>> lastValue;
+    private List<Versioned<byte[]>> lastData;
     private int pos;
 
     public KDTreeIterator(KDNode<List<Versioned<byte[]>>> root) {
@@ -22,7 +22,14 @@ public class KDTreeIterator implements ClosableIterator<Pair<ByteArray, Versione
     }
 
     @Override
-    public void close() {}
+    public void close() {
+        position = null;
+        value = null;
+        data = null;
+        lastPosition = null;
+        lastValue = null;
+        lastData = null;
+    }
 
     @Override
     public boolean hasNext() {
@@ -31,11 +38,11 @@ public class KDTreeIterator implements ClosableIterator<Pair<ByteArray, Versione
 
     @Override
     public Pair<ByteArray, Versioned<byte[]>> next() {
-        lvalue = value;
-        ldata = data;
-        lposition = position;
+        lastValue = value;
+        lastData = data;
+        lastPosition = position;
         scanNext(0);
-        return lvalue;
+        return lastValue;
     }
 
     private void scanNext(final int startpos) {
@@ -75,17 +82,17 @@ public class KDTreeIterator implements ClosableIterator<Pair<ByteArray, Versione
 
     @Override
     public void remove() {
-        if(ldata == null) {
+        if(lastData == null) {
             return;
         }
-        synchronized(ldata) {
-            ldata.remove(lvalue.getSecond());
-            if(ldata.size() > 0) {
+        synchronized(lastData) {
+            lastData.remove(lastValue.getSecond());
+            if(lastData.size() > 0) {
                 return;
             }
-            synchronized(lposition) {
-                if(lposition.getData() == ldata) {
-                    lposition.remove();
+            synchronized(lastPosition) {
+                if(lastPosition.getData() == lastData) {
+                    lastPosition.remove();
                 }
             }
         }
