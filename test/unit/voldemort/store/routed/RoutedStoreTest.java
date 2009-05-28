@@ -25,14 +25,17 @@ import java.util.Map;
 import voldemort.ServerTestUtils;
 import voldemort.TestUtils;
 import voldemort.VoldemortException;
+import voldemort.VoldemortTestConstants;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
 import voldemort.routing.RoutingStrategyType;
 import voldemort.store.AbstractByteArrayStoreTest;
+import voldemort.store.FailingReadsStore;
 import voldemort.store.FailingStore;
 import voldemort.store.InsufficientOperationalNodesException;
 import voldemort.store.SleepyStore;
 import voldemort.store.Store;
+import voldemort.store.StoreDefinition;
 import voldemort.store.UnreachableStoreException;
 import voldemort.store.memory.InMemoryStorageEngine;
 import voldemort.store.versioned.InconsistencyResolvingStore;
@@ -335,6 +338,78 @@ public class RoutedStoreTest extends AbstractByteArrayStoreTest {
             fail("Failure is expected");
         } catch(InsufficientOperationalNodesException e) { /* expected */}
         assertOperationalNodes(cluster, 0);
+    }
+
+    /**
+     * Tests that getAll works correctly with a node down in a two node cluster.
+     */
+    public void testGetAllWithNodeDown() {
+        Cluster cluster = VoldemortTestConstants.getTwoNodeCluster();
+
+        RoutedStore routedStore = getStore(cluster, 1, 2, 1, 0);
+        Store<ByteArray, byte[]> store = new InconsistencyResolvingStore<ByteArray, byte[]>(routedStore,
+                                                                                            new VectorClockInconsistencyResolver<byte[]>());
+
+        Map<ByteArray, byte[]> expectedValues = Maps.newHashMap();
+        for(byte i = 1; i < 11; ++i) {
+            ByteArray key = new ByteArray(new byte[] { i });
+            byte[] value = new byte[] { (byte) (i + 50) };
+            store.put(key, Versioned.value(value));
+            expectedValues.put(key, value);
+        }
+
+        cluster.getNodes().iterator().next().getStatus().setUnavailable();
+
+        Map<ByteArray, List<Versioned<byte[]>>> all = store.getAll(expectedValues.keySet());
+        assertEquals(expectedValues.size(), all.size());
+        for(Map.Entry<ByteArray, List<Versioned<byte[]>>> mapEntry: all.entrySet()) {
+            byte[] value = expectedValues.get(mapEntry.getKey());
+            assertEquals(new ByteArray(value), new ByteArray(mapEntry.getValue().get(0).getValue()));
+        }
+    }
+
+    public void testGetAllWithFailingStore() {
+        Cluster cluster = VoldemortTestConstants.getTwoNodeCluster();
+
+        StoreDefinition storeDef = ServerTestUtils.getStoreDef("test",
+                                                               2,
+                                                               1,
+                                                               1,
+                                                               2,
+                                                               2,
+                                                               RoutingStrategyType.CONSISTENT_STRATEGY);
+
+        Map<Integer, Store<ByteArray, byte[]>> subStores = Maps.newHashMap();
+        subStores.put(Iterables.get(cluster.getNodes(), 0).getId(),
+                      new InMemoryStorageEngine<ByteArray, byte[]>("test"));
+        subStores.put(Iterables.get(cluster.getNodes(), 1).getId(),
+                      new FailingReadsStore<ByteArray, byte[]>("test"));
+
+        RoutedStore routedStore = new RoutedStore("test",
+                                                  subStores,
+                                                  cluster,
+                                                  storeDef,
+                                                  1,
+                                                  true,
+                                                  1000L);
+
+        Store<ByteArray, byte[]> store = new InconsistencyResolvingStore<ByteArray, byte[]>(routedStore,
+                                                                                            new VectorClockInconsistencyResolver<byte[]>());
+
+        Map<ByteArray, byte[]> expectedValues = Maps.newHashMap();
+        for(byte i = 1; i < 11; ++i) {
+            ByteArray key = new ByteArray(new byte[] { i });
+            byte[] value = new byte[] { (byte) (i + 50) };
+            store.put(key, Versioned.value(value));
+            expectedValues.put(key, value);
+        }
+
+        Map<ByteArray, List<Versioned<byte[]>>> all = store.getAll(expectedValues.keySet());
+        assertEquals(expectedValues.size(), all.size());
+        for(Map.Entry<ByteArray, List<Versioned<byte[]>>> mapEntry: all.entrySet()) {
+            byte[] value = expectedValues.get(mapEntry.getKey());
+            assertEquals(new ByteArray(value), new ByteArray(mapEntry.getValue().get(0).getValue()));
+        }
     }
 
     /**
