@@ -8,43 +8,34 @@ import voldemort.utils.Time;
  * A thread-safe request counter that calculates throughput for a specified
  * duration of time.
  * 
- * @author elias
+ * @author elias, gmj
  * 
  */
 public class RequestCounter {
 
-    private static class Pair {
-
-        final long startTime;
-        final long count;
-        final double averageTime;
-
-        public Pair(long startTime, long count, double averageTime) {
-            this.startTime = startTime;
-            this.count = count;
-            this.averageTime = averageTime;
-        }
-    }
-
-    private final AtomicReference<Pair> values;
-    private final int duration;
+    private final AtomicReference<Accumulator> values;
+    private final int durationMS;
 
     /**
-     * @param duration specifies for how long you want to maintain this counter
-     *        (in milliseconds).
+     * @param durationMS specifies for how long you want to maintain this
+     *        counter (in milliseconds).
      */
-    public RequestCounter(int duration) {
-        this.values = new AtomicReference<Pair>(new Pair(System.currentTimeMillis(), 0, 0));
-        this.duration = duration;
+    public RequestCounter(int durationMS) {
+        this.values = new AtomicReference<Accumulator>(new Accumulator());
+        this.durationMS = durationMS;
     }
 
     public long getCount() {
-        return values.get().count;
+        return getValidAccumulator().count;
+    }
+
+    public long getTotalCount() {
+        return getValidAccumulator().total;
     }
 
     public float getThroughput() {
-        Pair oldv = values.get();
-        float elapsed = (System.currentTimeMillis() - oldv.startTime) / 1000f;
+        Accumulator oldv = getValidAccumulator();
+        float elapsed = (System.currentTimeMillis() - oldv.startTimeMS) / Time.MS_PER_SECOND;
         if(elapsed > 0f) {
             return oldv.count / elapsed;
         } else {
@@ -52,30 +43,80 @@ public class RequestCounter {
         }
     }
 
+    public String getDisplayThroughput() {
+        return String.format("%.2f", getThroughput());
+    }
+
     public double getAverageTimeInMs() {
-        return values.get().averageTime / Time.NS_PER_MS;
+        return getValidAccumulator().getAverageTimeNS() / Time.NS_PER_MS;
+    }
+
+    public String getDisplayAverageTimeInMs() {
+        return String.format("%.4f", getAverageTimeInMs());
+    }
+
+    public int getDuration() {
+        return durationMS;
+    }
+
+    private Accumulator getValidAccumulator() {
+        Accumulator accum = values.get();
+        long now = System.currentTimeMillis();
+        if(now - accum.startTimeMS > durationMS) {
+            return accum.newWithTotal();
+        } else {
+            return accum;
+        }
     }
 
     /*
-     * We need to make sure that the request is only added to a non-expired
-     * pair. If so, start a new counter pair with recent time.
+     * Updates the stats accumulator with another operation. We need to make
+     * sure that the request is only added to a non-expired pair. If so, start a
+     * new counter pair with recent time. We'll only try to do this 3 times - if
+     * other threads keep modifying while we're doing our own work, just bail.
+     * 
+     * @param timeNS time of operation, in nanoseconds
      */
-    public void addRequest(double time) {
+    public void addRequest(long timeNS) {
+
         for(int i = 0; i < 3; i++) {
-            Pair oldv = values.get();
-            long startTime = oldv.startTime;
+            Accumulator oldv = getValidAccumulator();
+
+            long startTimeMS = oldv.startTimeMS;
             long count = oldv.count + 1;
-            long now = System.currentTimeMillis();
-            double averageTime = oldv.averageTime;
-            averageTime += (time - averageTime) / count;
-            if(now - startTime > duration) {
-                startTime = now;
-                count = 1;
-                averageTime = time;
-            }
-            Pair newv = new Pair(startTime, count, averageTime);
-            if(values.compareAndSet(oldv, newv))
+            long totalTimeNS = oldv.totalTimeNS + timeNS;
+            long total = oldv.total + 1;
+
+            if(values.compareAndSet(oldv, new Accumulator(startTimeMS, count, totalTimeNS, total))) {
                 return;
+            }
+        }
+    }
+
+    private static class Accumulator {
+
+        final long startTimeMS;
+        final long count;
+        final long totalTimeNS;
+        final long total;
+
+        public Accumulator() {
+            this(System.currentTimeMillis(), 0, 0, 0);
+        }
+
+        public Accumulator newWithTotal() {
+            return new Accumulator(System.currentTimeMillis(), 0, 0, total);
+        }
+
+        public Accumulator(long startTimeMS, long count, long totalTimeNS, long total) {
+            this.startTimeMS = startTimeMS;
+            this.count = count;
+            this.totalTimeNS = totalTimeNS;
+            this.total = total;
+        }
+
+        public double getAverageTimeNS() {
+            return count > 0 ? 1f * totalTimeNS / count : -0f;
         }
     }
 }
